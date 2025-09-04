@@ -32,6 +32,23 @@ services:
     volumes:
       - ./data:/data
 
+  drive_fetcher:
+    build:
+      context: ./drive_fetcher
+      dockerfile: Dockerfile
+    container_name: drive-fetcher
+    restart: unless-stopped
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/creds/service_account.json
+      - DOWNLOAD_DIR=/downloads
+      - DRIVE_QUERY=mimeType contains 'image/'
+      - POLL_INTERVAL=60
+      # Optional: 指定フォルダのみ監視する場合は環境変数で設定
+      # - DRIVE_FOLDER_ID=xxxxxxxxxxxxxxxxxxxx
+    volumes:
+      - ./drive_creds:/creds:ro
+      - ./downloads:/downloads
+
 # Notes:
 # - Samba runs with host networking to expose SMB ports directly on the LAN.
 # - Receiver is published on port 8000; reach it via Tailscale IP:8000.
