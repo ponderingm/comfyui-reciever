@@ -1,0 +1,37 @@
+version: "3.8"
+services:
+  receiver:
+    build:
+      context: ./receiver
+      dockerfile: Dockerfile
+    container_name: comfyui-receiver
+    restart: unless-stopped
+    environment:
+      - SAVE_DIR=/data
+    volumes:
+      - ./data:/data
+    ports:
+      - "18080:8000"
+
+  samba:
+    image: dperson/samba:latest
+    container_name: comfyui-samba
+    restart: unless-stopped
+    depends_on:
+      - receiver
+    environment:
+      - TZ=UTC
+    command: [
+      "-s", "images;/data;yes;no;yes;all;none;none",
+      "-u", "${SAMBA_USER:-pi};${SAMBA_PASS:-raspberry}",
+      "-p"
+    ]
+    stdin_open: true
+    tty: true
+    network_mode: host
+    volumes:
+      - ./data:/data
+
+# Notes:
+# - Samba runs with host networking to expose SMB ports directly on the LAN.
+# - Receiver is published on port 8000; reach it via Tailscale IP:8000.
