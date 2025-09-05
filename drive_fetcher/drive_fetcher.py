@@ -13,6 +13,7 @@ DOWNLOAD_DIR = os.environ.get('DOWNLOAD_DIR', '/downloads')
 QUERY = os.environ.get('DRIVE_QUERY', "mimeType contains 'image/'")
 POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', '60'))
 FOLDER_ID = os.environ.get('DRIVE_FOLDER_ID')  # Optional: 指定フォルダのみ監視
+ARCHIVE_FOLDER_ID = os.environ.get('ARCHIVE_FOLDER_ID')  # アーカイブ先フォルダID
 
 
 def get_service():
@@ -36,7 +37,7 @@ def list_images(service):
     return resp.get('files', [])
 
 
-def download_and_delete(service, file_obj):
+def download_and_archive(service, file_obj):
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     file_id = file_obj['id']
     name = file_obj['name']
@@ -51,8 +52,22 @@ def download_and_delete(service, file_obj):
             print(f"[drive_fetcher] Downloading {name}: {int(status.progress()*100)}%")
     fh.close()
     print(f"[drive_fetcher] Downloaded: {dest}")
-    service.files().delete(fileId=file_id).execute()
-    print(f"[drive_fetcher] Deleted from Drive: {name}")
+    # Move to archive folder
+    if ARCHIVE_FOLDER_ID:
+        try:
+            # Get current parents
+            file = service.files().get(fileId=file_id, fields='parents').execute()
+            prev_parents = ",".join(file.get('parents', []))
+            service.files().update(
+                fileId=file_id,
+                addParents=ARCHIVE_FOLDER_ID,
+                removeParents=prev_parents
+            ).execute()
+            print(f"[drive_fetcher] Moved to archive folder: {name}")
+        except Exception as e:
+            print(f"[drive_fetcher] Error moving to archive: {e}", file=sys.stderr)
+    else:
+        print(f"[drive_fetcher] ARCHIVE_FOLDER_ID not set, skipping move.")
 
 
 def main():
@@ -64,7 +79,7 @@ def main():
             if files:
                 print(f"[drive_fetcher] Found {len(files)} image(s)")
             for f in files:
-                download_and_delete(service, f)
+                download_and_archive(service, f)
         except Exception as e:
             print(f"[drive_fetcher] Error: {e}", file=sys.stderr)
         time.sleep(POLL_INTERVAL)
