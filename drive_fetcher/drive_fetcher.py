@@ -6,6 +6,7 @@ from typing import List
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2 import service_account
+from datetime import datetime  # 追加
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 CREDENTIALS_PATH = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/creds/service_account.json')
@@ -40,8 +41,10 @@ def list_images(service):
 def download_and_archive(service, file_obj):
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     file_id = file_obj['id']
-    name = file_obj['name']
-    dest = os.path.join(DOWNLOAD_DIR, name)
+    original_name = file_obj['name']  # 元の名前保持
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    local_name = f"{timestamp}_{original_name}"
+    dest = os.path.join(DOWNLOAD_DIR, local_name)
     request = service.files().get_media(fileId=file_id)
     fh = io.FileIO(dest, 'wb')
     downloader = MediaIoBaseDownload(fh, request)
@@ -49,13 +52,12 @@ def download_and_archive(service, file_obj):
     while not done:
         status, done = downloader.next_chunk()
         if status:
-            print(f"[drive_fetcher] Downloading {name}: {int(status.progress()*100)}%")
+            print(f"[drive_fetcher] Downloading {local_name}: {int(status.progress()*100)}%")
     fh.close()
     print(f"[drive_fetcher] Downloaded: {dest}")
     # Move to archive folder
     if ARCHIVE_FOLDER_ID:
         try:
-            # Get current parents
             file = service.files().get(fileId=file_id, fields='parents').execute()
             prev_parents = ",".join(file.get('parents', []))
             service.files().update(
@@ -63,7 +65,7 @@ def download_and_archive(service, file_obj):
                 addParents=ARCHIVE_FOLDER_ID,
                 removeParents=prev_parents
             ).execute()
-            print(f"[drive_fetcher] Moved to archive folder: {name}")
+            print(f"[drive_fetcher] Moved to archive folder (remote name unchanged): {original_name}")
         except Exception as e:
             print(f"[drive_fetcher] Error moving to archive: {e}", file=sys.stderr)
     else:
