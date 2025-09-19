@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import io
+import re
 from typing import List
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -38,12 +39,29 @@ def list_images(service):
     return resp.get('files', [])
 
 
+def has_timestamp_prefix(filename: str) -> bool:
+    """
+    Detect if filename already starts with a timestamp prefix.
+    Supported patterns:
+    - YYYYMMDD-hhmmss...
+    - YYYYMMDD_hhmm...
+    """
+    patterns = [
+        r"^\d{8}[-_]\d{6}(?:[^0-9]|$)",  # date-time with seconds, e.g., 20250919-000141_
+        r"^\d{8}[-_]\d{4}(?:[^0-9]|$)",  # date-time with minutes, e.g., 20250919_0001_
+    ]
+    return any(re.match(p, filename) for p in patterns)
+
+
 def download_and_archive(service, file_obj):
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     file_id = file_obj['id']
     original_name = file_obj['name']  # 元の名前保持
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    local_name = f"{timestamp}_{original_name}"
+    if has_timestamp_prefix(original_name):
+        local_name = original_name
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        local_name = f"{timestamp}_{original_name}"
     dest = os.path.join(DOWNLOAD_DIR, local_name)
     request = service.files().get_media(fileId=file_id)
     fh = io.FileIO(dest, 'wb')
