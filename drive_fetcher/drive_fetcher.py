@@ -57,12 +57,23 @@ def download_and_archive(service, file_obj):
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     file_id = file_obj['id']
     original_name = file_obj['name']  # 元の名前保持
+    # Determine date folder (YYYYMMDD)
+    date_folder: str
     if has_timestamp_prefix(original_name):
+        # Extract YYYYMMDD from the prefix
+        m = re.match(r"^(\d{8})[-_]\d{4,6}", original_name)
+        date_folder = m.group(1) if m else datetime.now().strftime("%Y%m%d")
         local_name = original_name
     else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        now = datetime.now()
+        date_folder = now.strftime("%Y%m%d")
+        timestamp = now.strftime("%Y%m%d_%H%M")
         local_name = f"{timestamp}_{original_name}"
-    dest = os.path.join(DOWNLOAD_DIR, local_name)
+
+    # Create date-based subdirectory and destination path
+    target_dir = os.path.join(DOWNLOAD_DIR, date_folder)
+    os.makedirs(target_dir, exist_ok=True)
+    dest = os.path.join(target_dir, local_name)
     request = service.files().get_media(fileId=file_id)
     fh = io.FileIO(dest, 'wb')
     downloader = MediaIoBaseDownload(fh, request)
